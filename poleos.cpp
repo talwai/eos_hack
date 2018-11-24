@@ -59,7 +59,22 @@ CONTRACT poleos : public eosio::contract {
 	    print_f( "Vote % from poleos_vote \n", itr->user );
 	  }
          }
+      }
 
+      ACTION payout( uint64_t poll, uint64_t winning_outcome ) {
+	 print_f( "Paying out poll %", poll );
+
+	 // get total payout
+	auto itr = testp.find(poll);
+	eosio_assert( itr != testp.end(), "test table not set" );
+	double total_stake = itr -> total_stake;
+	 
+	auto idx = testv.get_index<"outcome"_n>();
+	for ( auto itr = idx.begin(); itr != idx.end(); itr++ ) {
+	  if (itr->outcome == winning_outcome && itr->poll == poll) {
+	    print_f( "Paying out % amount of % \n", itr->user, total_stake );
+	  }
+	}
       }
 
       // accessor for external contracts to easily send inline actions to your contract
@@ -103,4 +118,4 @@ CONTRACT poleos : public eosio::contract {
       test_payouts testp;
 };
 
-EOSIO_DISPATCH( poleos, (vote) (getvotes) (deletedata) )
+EOSIO_DISPATCH( poleos, (vote) (getvotes) (deletedata) (payout))
