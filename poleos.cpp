@@ -8,7 +8,7 @@ CONTRACT poleos : public eosio::contract {
       // receiver = contract account name, code = ?? (maybe action name)
       // datastream = serialized version of action parameters
       poleos( name receiver, name code, datastream<const char*> ds )
-         : contract(receiver, code, ds), testv(receiver, receiver.value) {}
+         : contract(receiver, code, ds), testv(receiver, receiver.value), testp(receiver, receiver.value) {}
 
 
       ACTION vote( name user, uint64_t poll, uint64_t outcome, double stake  ) {
@@ -25,6 +25,20 @@ CONTRACT poleos : public eosio::contract {
 	    v.outcome = outcome;
 	    v.stake = stake;
         });
+
+	auto itr = testp.find(poll);
+	if ( itr == testp.end() ) {
+	  testp.emplace(_self, [&]( auto& v) {
+	      v.poll = poll;
+	      v.outcome = outcome;
+	      v.total_stake = stake;
+	  });
+	} else {
+	    eosio_assert( itr != testp.end(), "test table not set" );
+	    testp.modify(itr, _self, [&]( auto& row) {
+	      row.total_stake += stake;	
+	    });
+	}
       }
       
       ACTION deletedata() {
@@ -37,11 +51,15 @@ CONTRACT poleos : public eosio::contract {
       }
 
       ACTION getvotes( uint64_t poll ) {
-	print_f( "Poll % from poleos_vote", poll );
-	auto idx = testv.get_index<"poll"_n>();
-        for ( auto itr = idx.begin(); itr != idx.end(); itr++ ) {
-            print( itr->user );
-        }
+	 print_f( "The poll % from poleos_vote", poll );
+	 
+	 auto idx = testv.get_index<"poll"_n>();
+         for ( auto itr = idx.begin(); itr != idx.end(); itr++ ) {
+	  if (itr->poll == poll) {
+	    print_f( "Vote % from poleos_vote \n", itr->user );
+	  }
+         }
+
       }
 
       // accessor for external contracts to easily send inline actions to your contract
@@ -63,15 +81,26 @@ CONTRACT poleos : public eosio::contract {
 	 auto primary_key() const { return key; }
       };
 
+      TABLE test_payout {
+	 uint64_t poll;
+	 uint64_t outcome;
+	 double total_stake;
+         
+	 auto primary_key() const { return poll; }
+      };
+
       typedef eosio::multi_index<"testvote"_n, test_vote, 
 	      eosio::indexed_by<"poll"_n, eosio::const_mem_fun<test_vote, uint64_t, &test_vote::by_poll>>, 
 	      eosio::indexed_by<"outcome"_n, eosio::const_mem_fun<test_vote, uint64_t, &test_vote::by_outcome>>,
 	      eosio::indexed_by<"user"_n, eosio::const_mem_fun<test_vote, uint64_t, &test_vote::by_user>>> test_votes;
 
 
+      typedef eosio::multi_index<"testpayout"_n, test_payout> test_payouts;
+
 
   private:
       test_votes testv;
+      test_payouts testp;
 };
 
 EOSIO_DISPATCH( poleos, (vote) (getvotes) (deletedata) )
