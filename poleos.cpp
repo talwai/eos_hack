@@ -18,6 +18,8 @@ CONTRACT poleos : public eosio::contract {
 	print_f( "stake % from poleos_vote", stake );
 
 	testv.emplace( _self, [&]( auto& v ) {
+	    v.key = testv.available_primary_key();
+
 	    v.user = user;
 	    v.poll = poll;
 	    v.outcome = outcome;
@@ -48,6 +50,7 @@ CONTRACT poleos : public eosio::contract {
 
       TABLE test_vote {
          name user;
+	 uint64_t key;
          
 	 uint64_t poll;
 	 uint64_t outcome;
@@ -55,13 +58,15 @@ CONTRACT poleos : public eosio::contract {
          
 	 uint64_t by_poll() const { return poll; }
 	 uint64_t by_outcome() const { return outcome; }
+	 uint64_t by_user() const { return user.value; }
         
-	 auto primary_key() const { return user.value; }
+	 auto primary_key() const { return key; }
       };
 
       typedef eosio::multi_index<"testvote"_n, test_vote, 
 	      eosio::indexed_by<"poll"_n, eosio::const_mem_fun<test_vote, uint64_t, &test_vote::by_poll>>, 
-	      eosio::indexed_by<"outcome"_n, eosio::const_mem_fun<test_vote, uint64_t, &test_vote::by_outcome>>> test_votes;
+	      eosio::indexed_by<"outcome"_n, eosio::const_mem_fun<test_vote, uint64_t, &test_vote::by_outcome>>,
+	      eosio::indexed_by<"user"_n, eosio::const_mem_fun<test_vote, uint64_t, &test_vote::by_user>>> test_votes;
 
 
 
