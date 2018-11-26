@@ -1,4 +1,5 @@
 #include <eosiolib/eosio.hpp>
+#include "eosio.token.hpp"
 
 using namespace eosio;
 
@@ -9,6 +10,66 @@ CONTRACT poleos : public eosio::contract {
       // datastream = serialized version of action parameters
       poleos( name receiver, name code, datastream<const char*> ds )
          : contract(receiver, code, ds), testv(receiver, receiver.value), testp(receiver, receiver.value) {}
+      // copied from eosio.token
+     struct [[eosio::table]] account {
+	asset    balance;
+
+	uint64_t primary_key()const { return balance.symbol.code().raw(); }
+     };
+
+      struct [[eosio::table]] currency_stats {
+	asset    supply;
+	asset    max_supply;
+	name     issuer;
+
+	uint64_t primary_key()const { return supply.symbol.code().raw(); }
+      };
+
+      typedef eosio::multi_index< "accounts"_n, account > accounts;
+      typedef eosio::multi_index< "stat"_n, currency_stats > stats;
+      
+      void add_balance( name owner, asset value, name ram_payer )
+      {
+	 accounts to_acnts( _self, owner.value );
+	 auto to = to_acnts.find( value.symbol.code().raw() );
+	 if( to == to_acnts.end() ) {
+	    to_acnts.emplace( ram_payer, [&]( auto& a ){
+	      a.balance = value;
+	    });
+	 } else {
+	    to_acnts.modify( to, same_payer, [&]( auto& a ) {
+	      a.balance += value;
+	    });
+	 }
+      }
+
+
+      void sub_balance( name owner, asset value ) {
+	 accounts from_acnts( _self, owner.value );
+
+	 const auto& from = from_acnts.get( value.symbol.code().raw(), "no balance object found" );
+
+	 from_acnts.modify( from, owner, [&]( auto& a ) {
+	       a.balance -= value;
+	    });
+      }
+
+      void transfer(  name    from,
+                      name    to,
+                      asset   quantity,
+                      string  memo )
+      {
+	  auto sym = quantity.symbol.code();
+	  stats statstable( _self, sym.raw() );
+	  const auto& st = statstable.get( sym.raw() );
+
+	  auto payer = has_auth( to ) ? to : from;
+
+	  sub_balance( from, quantity );
+	  add_balance( to, quantity, payer );
+      }
+      // done copying
+
 
 
       ACTION vote( name user, uint64_t poll, uint64_t outcome, double stake  ) {
@@ -73,6 +134,7 @@ CONTRACT poleos : public eosio::contract {
 	for ( auto itr = idx.begin(); itr != idx.end(); itr++ ) {
 	  if (itr->outcome == winning_outcome && itr->poll == poll) {
 	    print_f( "Paying out % amount of % \n", itr->user, total_stake );
+	    transfer("poleosaccont"_n, itr->user, asset(1, symbol("EOS", 1)), "winnigns");
 	  }
 	}
       }
